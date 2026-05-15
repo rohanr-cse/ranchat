@@ -338,7 +338,7 @@ def chat_control(message):
 @bot.message_handler(func=lambda m: m.chat.id in active_pair, content_types=['text'])
 def relay(message):
     partner = active_pair[message.chat.id]
-    bot.send_message(partner, f"💬 {message.text}")
+    bot.send_message(partner, f" {message.text}")
 
 # ====================== PAYMENT ======================
 @bot.callback_query_handler(func=lambda call: call.data == "buy_premium")
