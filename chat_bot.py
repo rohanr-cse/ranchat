@@ -91,6 +91,14 @@ active_pair = {}
 available = {'M': [], 'F': [], 'RANDOM': []}
 seekers = {'M': [], 'F': [], 'RANDOM': []}
 waiting_users = {}
+admin_chat_with = {}  # admin_id -> user_id
+
+
+def get_admin_for_user(user_id):
+    for admin_id, target_user in admin_chat_with.items():
+        if target_user == user_id:
+            return admin_id
+    return None
 
 # ====================== KEYBOARDS ======================
 def get_main_keyboard(user_id):
@@ -339,6 +347,78 @@ def chat_control(message):
 def relay(message):
     partner = active_pair[message.chat.id]
     bot.send_message(partner, f" {message.text}")
+
+
+# ====================== ADMIN CHAT ADDON ======================
+@bot.message_handler(commands=['chat'])
+def admin_start_chat(message):
+    admin_id = message.chat.id
+
+    if admin_id not in ADMIN_IDS:
+        return
+
+    parts = message.text.split()
+    if len(parts) < 2:
+        bot.send_message(admin_id, "Usage: /chat USER_ID")
+        return
+
+    try:
+        user_id = int(parts[1])
+    except ValueError:
+        bot.send_message(admin_id, "Invalid USER_ID")
+        return
+
+    admin_chat_with[admin_id] = user_id
+    bot.send_message(admin_id, f"💬 Now chatting with user {user_id}")
+    bot.send_message(user_id, "👋 Support is now connected. How can I help you?")
+
+
+@bot.message_handler(commands=['endchat'])
+def admin_end_chat(message):
+    admin_id = message.chat.id
+
+    if admin_id not in ADMIN_IDS:
+        return
+
+    if admin_id in admin_chat_with:
+        user_id = admin_chat_with.pop(admin_id)
+        bot.send_message(admin_id, "❌ Chat ended")
+        bot.send_message(user_id, "👋 Support chat ended.")
+    else:
+        bot.send_message(admin_id, "No active chat.")
+
+
+@bot.message_handler(func=lambda m: m.chat.id in ADMIN_IDS, content_types=['text'])
+def admin_message_router(message):
+    admin_id = message.chat.id
+
+    if message.text.startswith('/'):
+        return
+
+    if admin_id in admin_chat_with:
+        user_id = admin_chat_with[admin_id]
+        bot.send_message(user_id, message.text)
+
+
+@bot.message_handler(func=lambda m: m.chat.id not in ADMIN_IDS and get_admin_for_user(m.chat.id) is not None, content_types=['text'])
+def user_to_admin_router(message):
+    if message.text.startswith('/'):
+        return
+
+    admin_id = get_admin_for_user(message.chat.id)
+    if admin_id is None:
+        return
+
+    bot.send_message(admin_id, message.text)
+
+
+@bot.message_handler(func=lambda m: m.chat.id not in ADMIN_IDS and m.chat.id not in active_pair and get_admin_for_user(m.chat.id) is None, content_types=['text'])
+def unmatched_logger(message):
+    if message.text.startswith('/'):
+        return
+
+    for admin_id in ADMIN_IDS:
+        bot.send_message(admin_id, f"unmatched:{message.text}")
 
 # ====================== PAYMENT ======================
 @bot.callback_query_handler(func=lambda call: call.data == "buy_premium")
